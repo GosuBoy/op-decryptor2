@@ -1,0 +1,25 @@
+[package]
+name = "op-decryptor2"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Decrypt original OP-1 firmware into a validated plaintext Blackfin loader stream"
+license = "MIT"
+repository = "https://github.com/GosuBoy/op-decryptor2"
+readme = "README.md"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+crc32fast = "1.4"
+lzma-rs = "0.3"
+sha2 = "0.10"
+tar = "0.4"
+tempfile = "3.15"
+
+[profile.release]
+lto = "thin"
+strip = true
+
+[lints.rust]
+unsafe_code = "forbid"

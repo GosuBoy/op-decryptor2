@@ -1,0 +1,11 @@
+/target/
+*.op1
+*.ldr
+*.bin
+*.dump
+*.otp
+*.hex
+*.key
+otp*.txt
+key*.txt
+/fixtures/private/
