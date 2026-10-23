@@ -1,8 +1,29 @@
 # op-decryptor2
 
-A Rust command-line tool and library that decrypt **original Teenage Engineering
-OP-1** firmware into `plaintext.ldr`. Accepts a complete `.op1` update package or
-an extracted `OP1_vdk.ldr` and runs entirely on your computer.
+A Rust command-line tool and library for **decrypting the original Teenage
+Engineering OP-1's `OP1_vdk.ldr` firmware loader**.
+
+### What does it decrypt?
+
+An original OP-1 firmware update (`.op1`) contains a file named `OP1_vdk.ldr`.
+This is a **Blackfin loader (LDR)**: a sequence of headers and payloads that the
+device's boot process loads into memory. Some of its payload bytes are
+**encrypted with XTEA**. The affected LDR records carry a **decryption callback
+flag** telling the loader to decrypt them at load time, using a 128-bit key
+stored in the Blackfin chip's **OTP (one-time-programmable) memory, page `0xd0`**.
+
+**op-decryptor2 performs that XTEA decryption offline.** Given either a full
+`.op1` package or an extracted encrypted `OP1_vdk.ldr`, together with the
+OTP-derived key (or a compatible text OTP dump), it produces **another LDR
+file whose XTEA-encrypted payloads are decrypted and whose loader decryption
+callback flags have been removed**. The output retains the LDR record
+structure, other flags (including `INDIRECT`), metadata, and trailing bytes.
+It does not remove unrelated program callbacks or function calls.
+
+The default output filename, `plaintext.ldr`, is simply a name for that
+**decrypted LDR**. It is not an input requirement or a different file format:
+the result is still an LDR, not source code, a flat memory dump, or a complete
+`.op1` update. The tool runs locally without connecting to or modifying an OP-1.
 
 **Firmware 246 is verified byte for byte** against our established plaintext
 baseline. The repository contains source code and synthetic tests; supply the
@@ -31,25 +52,30 @@ CI tests Linux, macOS, and Windows, plus the minimum Rust version.
 
 ## Use
 
-Decrypt a complete update package:
+Supply an original OP-1 update (or its extracted `OP1_vdk.ldr`) and the
+XTEA key from OTP page `0xd0`. The tool does **not** read the device's OTP
+memory itself; provide either a key file or a compatible text OTP dump.
+
+Decrypt a complete `.op1` update (automatically extracts `OP1_vdk.ldr`):
 
 ```sh
 op-decryptor2 op1_246.op1 --key-file key.txt -o plaintext.ldr
 ```
 
-Decrypt an already extracted loader:
+Decrypt an already extracted, encrypted `OP1_vdk.ldr`:
 
 ```sh
 op-decryptor2 OP1_vdk.ldr --key-file key.txt -o plaintext.ldr
 ```
 
-Read the key from a supported **text** OTP dump:
+Alternatively, read the key from a supported **text** OTP dump:
 
 ```sh
 op-decryptor2 op1_246.op1 --otp-dump otp.txt -o plaintext.ldr
 ```
 
-`plaintext.ldr` is the default output name. Use `--force` to replace an existing
+`plaintext.ldr` is just the default name for the **decrypted LDR output**;
+you can choose any filename with `-o`. Use `--force` to replace an existing
 output; the input cannot also be the output. Output is written through a temporary
 file after all validation succeeds. Failure leaves an existing output intact.
 
@@ -80,8 +106,8 @@ ignored, and other pages are skipped. The two data fields are concatenated in
 display order. Missing, malformed, or duplicate target pages are errors. Binary
 OTP dumps are not accepted by this option. Only one key source may be specified.
 
-No key is needed when the input is already plaintext. Its bytes are preserved
-exactly; decrypting the result a second time is a no-op.
+If the input is already a decrypted LDR with no XTEA decryption callback flags,
+no key is required. Its bytes are preserved exactly; processing it again is a no-op.
 
 ### Verification
 
@@ -105,7 +131,7 @@ the program explicitly reports that key correctness remains unverified.
 `--format op1` or `--format ldr` overrides automatic detection. Run
 `op-decryptor2 --help` for all options.
 
-## What the implementation preserves
+## How decryption works and what it preserves
 
 1. Verify the `.op1` package's four-byte little-endian CRC32, decompress its
    LZMA-alone stream, and select the root `OP1_vdk.ldr` TAR member in memory.
@@ -115,8 +141,8 @@ the program explicitly reports that key correctness remains unverified.
    eight-byte unit at payload offsets `0, 24, 48, ...`. Payload words are
    little-endian. Restart the stride for every record.
 4. **Clear CALLBACK (`0x0400`) only, preserving INDIRECT (`0x2000`)**, and repair
-   the header XOR. All other header fields and unaffected payload bytes remain
-   unchanged.
+   the header XOR. These records no longer request XTEA decryption at load time.
+   All other header fields and unaffected payload bytes remain unchanged.
 5. Stop interpreting records after FINAL (`0x8000`) and preserve all following
    bytes verbatim.
 
@@ -132,9 +158,10 @@ main members, nonregular main members, malformed headers, truncated streams,
 unsupported callback flag combinations, and missing FINAL records are rejected.
 FILL counts are never used to allocate memory or rounded to alignment.
 
-The output is a **plaintext LDR stream for analysis**, including its original
-loader metadata and trailer. It is not a flat memory image or a `.op1` update.
-The program performs no hardware access, flashing, repacking, or loader execution.
+The output is a **Blackfin LDR with decrypted payload bytes and no loader
+XTEA-decryption callback flags**, including its original loader metadata and
+trailer. It is not a flat memory image or a `.op1` update. The program performs
+no hardware access, flashing, repacking, or loader execution.
 The verified target is the original OP-1; OP-1 Field and OP-XY are outside scope.
 
 ## Verified firmware-246 baseline
@@ -147,7 +174,7 @@ The output matched the previously established plaintext hash exactly.
 | --- | ---: | --- |
 | Official `op1_246.op1` | 13,039,128 | `c5315218f825f143b415ca554516541898abee843d3a236df0b54c04e1fb13a9` |
 | Encrypted `OP1_vdk.ldr` | 2,171,624 | `f79d299f6f9019c998013a4176223a6a1bc999a2d8c54451346861f6ea455c74` |
-| Canonical `plaintext.ldr` | 2,171,624 | `1e806672dc440d495987c6b1f33b300876e6a3bb1d58254aac5fe60c960e906a` |
+| Decrypted LDR (default name `plaintext.ldr`) | 2,171,624 | `1e806672dc440d495987c6b1f33b300876e6a3bb1d58254aac5fe60c960e906a` |
 
 Verified structure: **800 active records**, including 385 payload records, 413
 FILL records, and two zero-payload controls; **45 callback records**, **3,358 XTEA
