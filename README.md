@@ -79,6 +79,22 @@ you can choose any filename with `-o`. Use `--force` to replace an existing
 output; the input cannot also be the output. Output is written through a temporary
 file after all validation succeeds. Failure leaves an existing output intact.
 
+### Where to get an OTP dump
+
+The OP-1's XTEA key is stored in the Blackfin BF524's OTP page `0xd0`,
+not in the firmware update. A publicly shared **reference OTP text dump** is
+available in [Tolsi/op1dumps](https://github.com/Tolsi/op1dumps/blob/e42843c4a31ae88dbe5d7ee2413b02bd5caeff92/TE-OP-1-BF524-OTP-dump.txt).
+Save the linked file as `otp.txt`, or download it from a terminal:
+
+```sh
+curl -L https://raw.githubusercontent.com/Tolsi/op1dumps/e42843c4a31ae88dbe5d7ee2413b02bd5caeff92/TE-OP-1-BF524-OTP-dump.txt -o otp.txt
+```
+
+Pass that file with `--otp-dump otp.txt` as shown above. This is a reference
+dump from another device, not an OTP read from your own OP-1; key correctness
+must be verified against the firmware (automatically for stock firmware 246).
+The tool does not read OTP directly from hardware.
+
 ### Key formats
 
 `--key-file` reads **32 hexadecimal digits**, optionally surrounded by whitespace.
@@ -93,9 +109,8 @@ test key** means the words `[1, 2, 3, 4]`:
 This is a word-oriented textual format, not the bytes of a little-endian memory
 dump. A key can alternatively be supplied directly as `--key HEX`.
 
-`--otp-dump` accepts the format used in
-[Tolsi's published OP-1 OTP text dump](https://github.com/Tolsi/op1dumps/blob/e42843c4a31ae88dbe5d7ee2413b02bd5caeff92/TE-OP-1-BF524-OTP-dump.txt).
-It reads exactly one page `0xd0`, containing two 16-digit hexadecimal words:
+`--otp-dump` accepts the public reference dump's text format. It reads
+exactly one page `0xd0`, containing two 16-digit hexadecimal words:
 
 ```text
 !0xd0  0000000100000002 0000000300000004
